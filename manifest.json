@@ -1,0 +1,18 @@
+{
+  "manifest_version": 3,
+  "name": "AI Studio TTS Batch (Gemini Speech)",
+  "version": "1.0.0",
+  "description": "Tách file .txt theo dấu --- và lần lượt dán từng đoạn vào Google AI Studio Generate Speech, chờ tạo xong rồi tải audio về, rồi sang đoạn kế.",
+  "permissions": ["storage"],
+  "host_permissions": [
+    "https://aistudio.google.com/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["https://aistudio.google.com/*"],
+      "js": ["content.js"],
+      "css": ["panel.css"],
+      "run_at": "document_idle"
+    }
+  ]
+}
