@@ -29,7 +29,21 @@ thư mục **Tải xuống** (Downloads). (Đuôi file `.wav`/`.mp3` tùy địn
 
 > Muốn chạy có dừng/xác nhận giữa các đoạn: **tích** ô "Dừng chờ xác nhận giữa các đoạn".
 
-## 3. Nếu nó "không tìm thấy" ô lời / nút Run / Download
+## 3. Chọn giọng & đồng nhất giọng
+
+- Giọng **tự đồng nhất** cho cả video vì mọi đoạn chạy trên cùng một speaker.
+- Trong panel có ô **Giọng đọc**: chọn giọng rồi bấm **Áp dụng** (hoặc cứ **Bắt đầu**,
+  nó tự đặt giọng trước khi chạy). Để **— Giữ nguyên —** nếu bạn đã chọn sẵn trên trang.
+- Gợi ý cho nội dung trầm lắng / chữa lành (đánh dấu ⭐ trong danh sách):
+  Vindemiatrix (dịu), Sulafat (ấm), Achernar (êm), Enceladus (thì thầm),
+  Charon (trầm rõ), Algieba (mượt), Gacrux (trầm chín), Iapetus (trong).
+- Tick **"Đặt lại giọng trước mỗi đoạn"** nếu muốn chắc chắn tuyệt đối (chậm hơn chút).
+- **Phong cách giọng (persona)**: gõ mô tả (vd "trầm ấm, chậm rãi, nhẹ nhàng, chữa lành") —
+  extension điền vào ô *Audio Profile* trong bảng Speaker settings để giữ phong cách đồng nhất.
+  Để trống nếu không muốn đụng tới.
+- Cơ chế: mở bảng giọng → chọn đúng thẻ `data-voice-name` → (điền persona) → đóng bảng.
+
+## 4. Nếu nó "không tìm thấy" ô lời / nút Run / Download
 
 DOM của AI Studio hay đổi. Mở mục **⚙ Nâng cao** trong panel:
 
@@ -44,13 +58,13 @@ DOM của AI Studio hay đổi. Mở mục **⚙ Nâng cao** trong panel:
 - Bỏ chọn → extension tự lấy blob từ thẻ `<audio>` và tải (đặt tên theo số thứ tự).
   Dùng cách này nếu cách trên không bắt được nút.
 
-## 4. Các nút phụ
+## 5. Các nút phụ
 - **Chỉ điền / Run / Tải audio**: thao tác thủ công từng bước (debug).
 - **◀ Lùi / ⏭ Tiếp**: di chuyển giữa các đoạn.
 - **⏹ Dừng**: ngừng vòng lặp.
 - Kéo thanh tiêu đề để di chuyển panel; nút **▁** để thu gọn.
 
-## 5. Giới hạn cần biết
+## 6. Giới hạn cần biết
 - Đây là tự động hóa giao diện, **phụ thuộc DOM AI Studio** — Google đổi layout thì cần chỉnh selector.
 - Tôn trọng giới hạn (rate limit/quota) của AI Studio; chạy quá nhanh có thể bị chặn.
 - Thời gian chờ tối đa mỗi đoạn chỉnh ở **Nâng cao** (mặc định 240s).

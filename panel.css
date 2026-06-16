@@ -98,3 +98,9 @@ details.ttsb-adv input[type="text"], details.ttsb-adv input[type="number"] {
 .ttsb-hint { font-size: 11px; color: #777; line-height: 1.4; }
 .ttsb-check { display: flex; align-items: center; gap: 6px; font-size: 12px; }
 input[type="file"]#ttsb-file { display: none; }
+
+.ttsb-select {
+  flex: 1; background: #161616; color: #e8e8e8;
+  border: 1px solid #3a3a3a; border-radius: 8px; padding: 7px 8px; font-size: 13px;
+}
+.ttsb-select:focus { outline: 1px solid #3ea6ff; }

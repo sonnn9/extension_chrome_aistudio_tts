@@ -19,7 +19,45 @@
     filePrefix: "", // trống = tên file chỉ là số thứ tự (1, 2, 3...)
     autoConfirm: false, // false = chạy tự động hết, không dừng giữa các đoạn
     useNativeDownload: false, // false = tự fetch blob để đặt tên theo số thứ tự
+    voice: "", // tên giọng muốn dùng (trống = giữ nguyên giọng đang chọn trên trang)
+    reapplyVoice: false, // đặt lại giọng trước mỗi đoạn (đảm bảo tuyệt đối đồng nhất)
+    persona: "", // mô tả phong cách giọng (Audio Profile) — trống = không đụng tới
   };
+
+  // Danh sách giọng Gemini TTS (⭐ = hợp nội dung trầm lắng / chữa lành)
+  const VOICES = [
+    ["", "— Giữ nguyên giọng trên trang —"],
+    ["Vindemiatrix", "⭐ Vindemiatrix — Dịu dàng"],
+    ["Sulafat", "⭐ Sulafat — Ấm áp"],
+    ["Achernar", "⭐ Achernar — Êm, nhẹ"],
+    ["Enceladus", "⭐ Enceladus — Thì thầm, có hơi thở"],
+    ["Charon", "⭐ Charon — Trầm, rõ ràng"],
+    ["Algieba", "⭐ Algieba — Mượt mà"],
+    ["Gacrux", "⭐ Gacrux — Trầm chín, từng trải"],
+    ["Iapetus", "⭐ Iapetus — Trong trẻo"],
+    ["Zephyr", "Zephyr — Sáng, cao"],
+    ["Puck", "Puck — Tươi vui"],
+    ["Kore", "Kore — Chắc chắn"],
+    ["Fenrir", "Fenrir — Hào hứng"],
+    ["Leda", "Leda — Trẻ trung"],
+    ["Orus", "Orus — Chắc, trầm"],
+    ["Aoede", "Aoede — Nhẹ nhàng, thoáng"],
+    ["Callirrhoe", "Callirrhoe — Thoải mái"],
+    ["Autonoe", "Autonoe — Sáng"],
+    ["Umbriel", "Umbriel — Dễ chịu"],
+    ["Despina", "Despina — Mượt"],
+    ["Erinome", "Erinome — Trong"],
+    ["Algenib", "Algenib — Khàn ấm"],
+    ["Rasalgethi", "Rasalgethi — Rõ, nhiều thông tin"],
+    ["Laomedeia", "Laomedeia — Lạc quan"],
+    ["Alnilam", "Alnilam — Chắc"],
+    ["Schedar", "Schedar — Đều, ổn"],
+    ["Pulcherrima", "Pulcherrima — Hướng tới trước"],
+    ["Achird", "Achird — Thân thiện"],
+    ["Zubenelgenubi", "Zubenelgenubi — Đời thường"],
+    ["Sadachbia", "Sadachbia — Sống động"],
+    ["Sadaltager", "Sadaltager — Hiểu biết"],
+  ];
   const CFG_VERSION = 2; // tăng khi đổi hành vi mặc định để reset cấu hình cũ
   let cfg = loadCfg();
 
@@ -50,6 +88,22 @@
       <div class="ttsb-progress">
         <span id="ttsb-filename">Chưa nạp file</span> ·
         Đoạn <span id="ttsb-counter">0 / 0</span>
+      </div>
+
+      <div>
+        <div class="ttsb-label">Giọng đọc (đồng nhất cả video)</div>
+        <div class="ttsb-row">
+          <select id="ttsb-voice" class="ttsb-select"></select>
+          <button class="ttsb-btn small" id="ttsb-applyvoice">Áp dụng</button>
+        </div>
+        <label class="ttsb-check" style="margin-top:6px">
+          <input type="checkbox" id="ttsb-reapply"> Đặt lại giọng trước mỗi đoạn (chắc chắn đồng nhất)
+        </label>
+        <div class="ttsb-field" style="margin-top:6px">
+          <span class="ttsb-label">Phong cách giọng (persona) — tùy chọn</span>
+          <input type="text" id="ttsb-persona" class="ttsb-select"
+            placeholder="vd: trầm ấm, chậm rãi, nhẹ nhàng, chữa lành">
+        </div>
       </div>
 
       <div>
@@ -123,6 +177,10 @@
     file: $("#ttsb-file"),
     filename: $("#ttsb-filename"),
     counter: $("#ttsb-counter"),
+    voice: $("#ttsb-voice"),
+    applyvoice: $("#ttsb-applyvoice"),
+    reapply: $("#ttsb-reapply"),
+    persona: $("#ttsb-persona"),
     current: $("#ttsb-current"),
     start: $("#ttsb-start"),
     next: $("#ttsb-next"),
@@ -143,6 +201,16 @@
     testDl: $("#ttsb-test-dl"),
     log: $("#ttsb-log"),
   };
+
+  // Đổ danh sách giọng vào dropdown
+  for (const [val, label] of VOICES) {
+    const opt = document.createElement("option");
+    opt.value = val; opt.textContent = label;
+    el.voice.appendChild(opt);
+  }
+  el.voice.value = cfg.voice;
+  el.reapply.checked = cfg.reapplyVoice;
+  el.persona.value = cfg.persona;
 
   // Hydrate settings vào UI
   el.selSpeech.value = cfg.speechSelector;
@@ -193,13 +261,16 @@
     cfg.filePrefix = (el.prefix.value.trim() || "tts").replace(/[^\w\-]+/g, "_");
     cfg.autoConfirm = el.autoconfirm.checked;
     cfg.useNativeDownload = el.nativedl.checked;
+    cfg.voice = el.voice.value;
+    cfg.reapplyVoice = el.reapply.checked;
+    cfg.persona = el.persona.value.trim();
     try { localStorage.setItem("ttsb-cfg", JSON.stringify(cfg)); } catch {}
   }
   function clampNum(n, lo, hi, def) {
     if (!Number.isFinite(n)) return def;
     return Math.min(hi, Math.max(lo, n));
   }
-  [el.selSpeech, el.selRun, el.selDl, el.maxwait, el.prefix, el.autoconfirm, el.nativedl]
+  [el.selSpeech, el.selRun, el.selDl, el.maxwait, el.prefix, el.autoconfirm, el.nativedl, el.voice, el.reapply, el.persona]
     .forEach((node) => node.addEventListener("change", saveCfg));
 
   // ---------- Tách đoạn ----------
@@ -345,10 +416,18 @@
     return out;
   }
 
-  // ---------- Điền lời ----------
-  function fillSpeech(text) {
-    const node = findSpeechInput();
-    if (!node) { log("✗ Không tìm thấy ô nhập lời.", "err"); return false; }
+  async function waitFor(fn, ms) {
+    const end = Date.now() + ms;
+    while (Date.now() < end) {
+      const r = fn();
+      if (r) return r;
+      await new Promise((res) => setTimeout(res, 200));
+    }
+    return null;
+  }
+
+  // ---------- Điền giá trị vào textarea/contenteditable (dùng chung) ----------
+  function applyValue(node, text) {
     node.focus();
     const tag = node.tagName.toLowerCase();
     if (tag === "textarea" || tag === "input") {
@@ -360,7 +439,6 @@
       node.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: text }));
       node.dispatchEvent(new Event("change", { bubbles: true }));
     } else {
-      // contenteditable
       const sel = window.getSelection();
       const range = document.createRange();
       range.selectNodeContents(node);
@@ -374,6 +452,91 @@
         node.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: text }));
       }
     }
+  }
+
+  // ---------- Chọn giọng (theo DOM thực: .voice-card[data-voice-name]) ----------
+  function findVoiceChip() {
+    let chip = document.querySelector("button.voice-chip");
+    if (chip && isVisible(chip)) return chip;
+    return findButtonByText([/speaker\s*\d/i, /\bvoice\b/i]);
+  }
+  function findVoiceCard(name) {
+    try {
+      const card = document.querySelector(`.voice-card[data-voice-name="${CSS.escape(name)}"]`);
+      if (card) return card;
+    } catch {}
+    // fallback theo aria-label/nội dung nút
+    const btns = [...document.querySelectorAll(".voice-card .voice-card-content, .voice-card button")];
+    return btns.find((b) => (b.getAttribute("aria-label") || b.textContent || "").trim().startsWith(name))?.closest(".voice-card") || null;
+  }
+  function isDialogOpen() {
+    return !!document.querySelector("ms-speaker-settings-panel, .voice-list");
+  }
+  function closeVoiceDialog() {
+    const close = document.querySelector(
+      "button[mat-dialog-close], button[data-test-close-button], button[aria-label='Close panel']"
+    );
+    if (close) { close.click(); return; }
+    const bd = document.querySelector(".cdk-overlay-backdrop");
+    if (bd) { try { bd.click(); } catch {} }
+  }
+  async function openVoiceDialog() {
+    if (isDialogOpen()) return true;
+    const chip = findVoiceChip();
+    if (!chip) { log("✗ Không thấy chip chọn giọng (Speaker).", "err"); return false; }
+    chip.click();
+    return !!(await waitFor(isDialogOpen, 3000));
+  }
+  function fillPersona() {
+    if (!cfg.persona) return;
+    const ta = document.querySelector(
+      "ms-speaker-settings-panel .audio-profile-section textarea, textarea[placeholder*='voice persona']"
+    );
+    if (ta) {
+      applyValue(ta, cfg.persona);
+      log(`✓ Đã đặt phong cách (persona): "${cfg.persona.slice(0, 40)}..."`, "ok");
+    } else {
+      log("Không thấy ô Audio Profile để đặt persona.", "warn");
+    }
+  }
+  async function selectVoice(name) {
+    if (!name && !cfg.persona) return true;
+    // Bỏ qua nếu chip đã đúng giọng và không cần đặt persona
+    const chip = findVoiceChip();
+    const cur = chip ? (chip.innerText || chip.textContent || "").trim() : "";
+    const already = name && new RegExp("(^|[^a-z])" + name + "([^a-z]|$)", "i").test(cur);
+    if (already && !cfg.persona) { log(`Giọng đã là ${name}, bỏ qua.`); return true; }
+
+    const opened = await openVoiceDialog();
+    if (!opened) return false;
+    await delay(250);
+
+    if (cfg.persona) fillPersona();
+
+    if (name && !already) {
+      const card = await waitFor(() => findVoiceCard(name), 3000);
+      if (!card) {
+        log(`✗ Không tìm thấy giọng "${name}" trong bảng.`, "err");
+        closeVoiceDialog();
+        return false;
+      }
+      const btn = card.querySelector(".voice-card-content") || card.querySelector("button") || card;
+      btn.click();
+      await delay(300);
+      log(`✓ Đã chọn giọng ${name}.`, "ok");
+    }
+
+    await delay(200);
+    closeVoiceDialog();
+    await delay(200);
+    return true;
+  }
+
+  // ---------- Điền lời ----------
+  function fillSpeech(text) {
+    const node = findSpeechInput();
+    if (!node) { log("✗ Không tìm thấy ô nhập lời.", "err"); return false; }
+    applyValue(node, text);
     log(`✓ Đã điền đoạn (${text.length} ký tự) vào: ${describe(node)}`, "ok");
     return true;
   }
@@ -548,6 +711,10 @@
 
     setStatus("running");
     log(`=== ĐOẠN ${S.index + 1}/${S.segments.length} ===`);
+    if (cfg.reapplyVoice && (cfg.voice || cfg.persona)) {
+      await selectVoice(cfg.voice);
+      await delay(300);
+    }
     const before = snapshotBefore();
     if (!fillSpeech(text)) return haltError();
     await delay(500);
@@ -610,7 +777,7 @@
   const delay = (ms) => new Promise((r) => setTimeout(r, ms));
 
   // ---------- Điều khiển ----------
-  function startRun() {
+  async function startRun() {
     if (!S.segments.length) { log("Chưa có đoạn nào. Hãy chọn file .txt.", "warn"); return; }
     saveCfg();
     S.running = true;
@@ -619,7 +786,12 @@
     el.stop.disabled = false;
     el.pick.disabled = true;
     log(`Bắt đầu từ đoạn ${S.index + 1}. Auto xác nhận: ${cfg.autoConfirm ? "BẬT" : "TẮT"}.`);
-    processSegment();
+    if (cfg.voice || cfg.persona) {
+      log(`Đặt giọng${cfg.voice ? " " + cfg.voice : ""}${cfg.persona ? " + persona" : ""}...`);
+      await selectVoice(cfg.voice);
+      await delay(400);
+    }
+    if (S.running) processSegment();
   }
 
   function stopRun(done) {
@@ -668,6 +840,12 @@
     };
     reader.onerror = () => log("✗ Không đọc được file.", "err");
     reader.readAsText(f, "utf-8");
+  });
+
+  el.applyvoice.addEventListener("click", async () => {
+    saveCfg();
+    if (!cfg.voice && !cfg.persona) { log("Chưa chọn giọng/persona.", "warn"); return; }
+    await selectVoice(cfg.voice);
   });
 
   el.start.addEventListener("click", startRun);
