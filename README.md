@@ -22,10 +22,14 @@ Tự động dán lần lượt từng đoạn (tách bằng dấu `---` trong f
 4. Bấm **▶ Bắt đầu**. Extension chạy **tự động hết tất cả các đoạn**:
    - Mỗi đoạn: điền lời → **Run** → chờ audio xong → **tải về** → tự sang đoạn kế, tới hết.
 
-File tải về đặt tên theo **số thứ tự tăng dần**: `1.wav`, `2.wav`, `3.wav`, … trong
-thư mục **Tải xuống** (Downloads). (Đuôi file `.wav`/`.mp3` tùy định dạng AI Studio trả về.)
+File đặt tên theo **số thứ tự tăng dần**: `1.wav`, `2.wav`, `3.wav`, …
+(Đuôi `.wav`/`.mp3` tùy định dạng AI Studio trả về.)
 
-> Lần đầu Chrome có thể hỏi *"site muốn tự tải nhiều file"* → bấm **Allow** để chạy mượt.
+### Chọn thư mục lưu
+- Bấm **📁 Chọn thư mục lưu** → chọn folder. File ghi thẳng vào đó (`1.wav`, `2.wav`…),
+  **không cần** prompt tải, không hỏi "tải nhiều file".
+- Không chọn → mặc định vào **Downloads**. Lần đầu Chrome có thể hỏi *"tải nhiều file"* → **Allow**.
+- Lưu ý: chọn lại thư mục sau mỗi lần **F5** (quyền thư mục không giữ qua reload).
 
 > Muốn chạy có dừng/xác nhận giữa các đoạn: **tích** ô "Dừng chờ xác nhận giữa các đoạn".
 
@@ -41,7 +45,10 @@ thư mục **Tải xuống** (Downloads). (Đuôi file `.wav`/`.mp3` tùy địn
 - **Phong cách giọng (persona)**: gõ mô tả (vd "trầm ấm, chậm rãi, nhẹ nhàng, chữa lành") —
   extension điền vào ô *Audio Profile* trong bảng Speaker settings để giữ phong cách đồng nhất.
   Để trống nếu không muốn đụng tới.
-- Cơ chế: mở bảng giọng → chọn đúng thẻ `data-voice-name` → (điền persona) → đóng bảng.
+- **Style / Pace / Accent** (Director's note): bấm **🔍 Dò lựa chọn** một lần để extension
+  đọc danh sách thật từ trang và đổ vào gợi ý 3 ô; sau đó bấm vào ô là có dropdown để chọn
+  (vd Pace = `Slow` cho audio chữa lành). Để trống = không đụng tới.
+- Cơ chế: mở bảng giọng → đặt persona/style/pace/accent → chọn đúng thẻ `data-voice-name` → đóng bảng.
 
 ## 4. Nếu nó "không tìm thấy" ô lời / nút Run / Download
 

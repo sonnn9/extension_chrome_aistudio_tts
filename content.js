@@ -22,6 +22,9 @@
     voice: "", // tên giọng muốn dùng (trống = giữ nguyên giọng đang chọn trên trang)
     reapplyVoice: false, // đặt lại giọng trước mỗi đoạn (đảm bảo tuyệt đối đồng nhất)
     persona: "", // mô tả phong cách giọng (Audio Profile) — trống = không đụng tới
+    style: "", // Director's note: Style
+    pace: "", // Director's note: Pace (vd Slow) — hợp audio chữa lành
+    accent: "", // Director's note: Accent
   };
 
   // Danh sách giọng Gemini TTS (⭐ = hợp nội dung trầm lắng / chữa lành)
@@ -69,6 +72,7 @@
     paused: false,
     awaitingConfirm: false,
     fileName: "",
+    dirHandle: null, // thư mục lưu (File System Access API)
   };
 
   // ---------- Build panel UI ----------
@@ -84,6 +88,10 @@
       <div class="ttsb-row">
         <button class="ttsb-btn" id="ttsb-pick">📄 Chọn file .txt</button>
         <input type="file" id="ttsb-file" accept=".txt,.md,text/plain" />
+      </div>
+      <div class="ttsb-row">
+        <button class="ttsb-btn" id="ttsb-pickdir">📁 Chọn thư mục lưu</button>
+        <span id="ttsb-dirname" class="ttsb-progress" style="flex:1">Mặc định: Downloads</span>
       </div>
       <div class="ttsb-progress">
         <span id="ttsb-filename">Chưa nạp file</span> ·
@@ -104,6 +112,18 @@
           <input type="text" id="ttsb-persona" class="ttsb-select"
             placeholder="vd: trầm ấm, chậm rãi, nhẹ nhàng, chữa lành">
         </div>
+        <div class="ttsb-row" style="margin-top:6px">
+          <input type="text" id="ttsb-style" class="ttsb-select" placeholder="Style" list="ttsb-style-list">
+          <input type="text" id="ttsb-pace" class="ttsb-select" placeholder="Pace" list="ttsb-pace-list">
+          <input type="text" id="ttsb-accent" class="ttsb-select" placeholder="Accent" list="ttsb-accent-list">
+          <datalist id="ttsb-style-list"></datalist>
+          <datalist id="ttsb-pace-list"></datalist>
+          <datalist id="ttsb-accent-list"></datalist>
+        </div>
+        <div class="ttsb-row" style="margin-top:6px">
+          <button class="ttsb-btn small" id="ttsb-discover">🔍 Dò lựa chọn Style/Pace/Accent</button>
+        </div>
+        <p class="ttsb-hint">Bấm "Dò lựa chọn" để lấy danh sách thật từ trang (gõ vào ô sẽ có gợi ý). Để trống = không đụng tới.</p>
       </div>
 
       <div>
@@ -175,12 +195,21 @@
     header: $("#ttsb-header"),
     pick: $("#ttsb-pick"),
     file: $("#ttsb-file"),
+    pickdir: $("#ttsb-pickdir"),
+    dirname: $("#ttsb-dirname"),
     filename: $("#ttsb-filename"),
     counter: $("#ttsb-counter"),
     voice: $("#ttsb-voice"),
     applyvoice: $("#ttsb-applyvoice"),
     reapply: $("#ttsb-reapply"),
     persona: $("#ttsb-persona"),
+    style: $("#ttsb-style"),
+    pace: $("#ttsb-pace"),
+    accent: $("#ttsb-accent"),
+    discover: $("#ttsb-discover"),
+    styleList: $("#ttsb-style-list"),
+    paceList: $("#ttsb-pace-list"),
+    accentList: $("#ttsb-accent-list"),
     current: $("#ttsb-current"),
     start: $("#ttsb-start"),
     next: $("#ttsb-next"),
@@ -211,6 +240,9 @@
   el.voice.value = cfg.voice;
   el.reapply.checked = cfg.reapplyVoice;
   el.persona.value = cfg.persona;
+  el.style.value = cfg.style;
+  el.pace.value = cfg.pace;
+  el.accent.value = cfg.accent;
 
   // Hydrate settings vào UI
   el.selSpeech.value = cfg.speechSelector;
@@ -264,13 +296,16 @@
     cfg.voice = el.voice.value;
     cfg.reapplyVoice = el.reapply.checked;
     cfg.persona = el.persona.value.trim();
+    cfg.style = el.style.value.trim();
+    cfg.pace = el.pace.value.trim();
+    cfg.accent = el.accent.value.trim();
     try { localStorage.setItem("ttsb-cfg", JSON.stringify(cfg)); } catch {}
   }
   function clampNum(n, lo, hi, def) {
     if (!Number.isFinite(n)) return def;
     return Math.min(hi, Math.max(lo, n));
   }
-  [el.selSpeech, el.selRun, el.selDl, el.maxwait, el.prefix, el.autoconfirm, el.nativedl, el.voice, el.reapply, el.persona]
+  [el.selSpeech, el.selRun, el.selDl, el.maxwait, el.prefix, el.autoconfirm, el.nativedl, el.voice, el.reapply, el.persona, el.style, el.pace, el.accent]
     .forEach((node) => node.addEventListener("change", saveCfg));
 
   // ---------- Tách đoạn ----------
@@ -487,6 +522,76 @@
     chip.click();
     return !!(await waitFor(isDialogOpen, 3000));
   }
+  // Đặt Style / Pace / Accent (menu trong Director's note)
+  async function setDirectorNote(attr, value) {
+    if (!value) return;
+    const trigger = findAttributeTrigger(attr);
+    if (!trigger) { log(`Không thấy nút ${attr} trong bảng.`, "warn"); return; }
+    trigger.click();
+    const panel = await waitFor(menuPanel, 2000);
+    if (!panel) { log(`Menu ${attr} không mở.`, "warn"); return; }
+    const items = [...panel.querySelectorAll("[role='menuitem'], .mat-mdc-menu-item, button")].filter(isVisible);
+    let hit = items.find((i) => (i.innerText || i.textContent || "").trim().toLowerCase() === value.toLowerCase());
+    if (!hit) {
+      const re = new RegExp(value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+      hit = items.find((i) => re.test((i.innerText || i.textContent || "").trim()));
+    }
+    if (hit) {
+      hit.click();
+      log(`✓ ${attr} = ${(hit.innerText || hit.textContent || "").trim()}`, "ok");
+    } else {
+      const opts = items.map((i) => (i.innerText || i.textContent || "").trim()).filter(Boolean).join(", ");
+      log(`Không khớp ${attr}="${value}". Lựa chọn có sẵn: ${opts || "(trống)"}`, "warn");
+      trigger.click(); // đóng menu
+    }
+    await delay(250);
+  }
+
+  function findAttributeTrigger(attr) {
+    return [...document.querySelectorAll("button.attribute-chip, button.mat-mdc-menu-trigger")]
+      .find((b) => {
+        const a = (b.getAttribute("aria-label") || "").trim().toLowerCase();
+        const t = (b.textContent || "").trim().toLowerCase();
+        return a === attr.toLowerCase() || t.startsWith(attr.toLowerCase());
+      });
+  }
+  function menuPanel() {
+    return document.querySelector(".cdk-overlay-container .mat-mdc-menu-panel, .cdk-overlay-container [role='menu']");
+  }
+  // Mở 1 menu attribute, đọc các lựa chọn, đóng lại
+  async function readMenuOptions(attr) {
+    const trigger = findAttributeTrigger(attr);
+    if (!trigger) return [];
+    trigger.click();
+    const panel = await waitFor(menuPanel, 2000);
+    if (!panel) return [];
+    const items = [...panel.querySelectorAll("[role='menuitem'], .mat-mdc-menu-item, button")]
+      .filter(isVisible)
+      .map((i) => (i.innerText || i.textContent || "").trim())
+      .filter(Boolean);
+    trigger.click(); // đóng menu
+    await delay(200);
+    return [...new Set(items)];
+  }
+  function fillDatalist(listEl, opts) {
+    listEl.innerHTML = "";
+    opts.forEach((o) => { const op = document.createElement("option"); op.value = o; listEl.appendChild(op); });
+  }
+  async function discoverNotes() {
+    log("🔍 Đang dò lựa chọn Style/Pace/Accent...");
+    const opened = await openVoiceDialog();
+    if (!opened) { log("Không mở được bảng Speaker để dò.", "err"); return; }
+    await delay(350);
+    for (const [attr, listEl] of [["Style", el.styleList], ["Pace", el.paceList], ["Accent", el.accentList]]) {
+      const opts = await readMenuOptions(attr);
+      fillDatalist(listEl, opts);
+      log(`${attr}: ${opts.join(", ") || "(không đọc được)"}`, opts.length ? "ok" : "warn");
+      await delay(200);
+    }
+    closeVoiceDialog();
+    log("✓ Dò xong. Bấm vào ô Style/Pace/Accent để xem gợi ý.", "ok");
+  }
+
   function fillPersona() {
     if (!cfg.persona) return;
     const ta = document.querySelector(
@@ -500,18 +605,22 @@
     }
   }
   async function selectVoice(name) {
-    if (!name && !cfg.persona) return true;
-    // Bỏ qua nếu chip đã đúng giọng và không cần đặt persona
+    const hasNotes = cfg.persona || cfg.style || cfg.pace || cfg.accent;
+    if (!name && !hasNotes) return true;
+    // Bỏ qua nếu chip đã đúng giọng và không cần đặt thêm gì
     const chip = findVoiceChip();
     const cur = chip ? (chip.innerText || chip.textContent || "").trim() : "";
     const already = name && new RegExp("(^|[^a-z])" + name + "([^a-z]|$)", "i").test(cur);
-    if (already && !cfg.persona) { log(`Giọng đã là ${name}, bỏ qua.`); return true; }
+    if (already && !hasNotes) { log(`Giọng đã là ${name}, bỏ qua.`); return true; }
 
     const opened = await openVoiceDialog();
     if (!opened) return false;
     await delay(250);
 
     if (cfg.persona) fillPersona();
+    await setDirectorNote("Style", cfg.style);
+    await setDirectorNote("Pace", cfg.pace);
+    await setDirectorNote("Accent", cfg.accent);
 
     if (name && !already) {
       const card = await waitFor(() => findVoiceCard(name), 3000);
@@ -604,7 +713,7 @@
     return (async () => {
       const deadline = start + cfg.maxWaitSec * 1000;
       let sawBusy = false;
-      let stableCount = 0, lastSignal = "";
+      let readyCount = 0;
       let lastLog = -5;
       while (Date.now() < deadline) {
         if (!S.running) return null;
@@ -615,19 +724,16 @@
         const busy = isRunBusy();
         if (busy) sawBusy = true;
 
-        // tín hiệu hoàn thành
-        let signal = "";
-        if (freshAudio.length) signal = "audio:" + freshAudio[freshAudio.length - 1];
-        else if (dlNow.length > before.dlCount) signal = "dl+";
-        else if (sawBusy && !busy && dlNow.length > 0) signal = "run-idle";
-
-        if (signal) {
-          if (signal === lastSignal) {
-            stableCount++;
-            if (stableCount >= 2) {
-              return { audio: freshAudio[freshAudio.length - 1] || null, dl: dlNow[dlNow.length - 1] || findDownloadButton() };
-            }
-          } else { lastSignal = signal; stableCount = 0; }
+        // CHỈ coi là xong khi: Run KHÔNG còn bận + đã có audio mới (hoặc nút tải)
+        const ready = !busy && (freshAudio.length > 0 || dlNow.length > before.dlCount || (sawBusy && dlNow.length > 0));
+        if (ready) {
+          readyCount++;
+          const need = sawBusy ? 2 : 3; // chưa từng thấy "bận" thì đòi ổn định lâu hơn
+          if (readyCount >= need) {
+            return { audio: freshAudio[freshAudio.length - 1] || null, dl: dlNow[dlNow.length - 1] || findDownloadButton(), sawBusy };
+          }
+        } else {
+          readyCount = 0;
         }
 
         if (elapsed - lastLog >= 5) {
@@ -640,8 +746,24 @@
     })();
   }
 
+  // Chờ phần tử <audio> nạp đủ (đã biết thời lượng) — tránh tải file dở dang
+  async function waitAudioReady(src) {
+    const deadline = Date.now() + Math.min(90000, cfg.maxWaitSec * 1000);
+    while (Date.now() < deadline) {
+      if (!S.running) return null;
+      let a = src ? [...document.querySelectorAll("audio")].find((x) => (x.currentSrc || x.src) === src) : null;
+      if (!a) a = [...document.querySelectorAll("audio")].filter((x) => x.currentSrc || x.src).pop();
+      if (a && !isRunBusy()) {
+        const dur = a.duration;
+        if (a.readyState >= 1 && isFinite(dur) && dur > 0) return a;
+      }
+      await delay(400);
+    }
+    return null;
+  }
+
   // ---------- Tải audio ----------
-  async function downloadCurrent(name) {
+  async function downloadCurrent(name, audioEl) {
     if (cfg.useNativeDownload) {
       const btn = findDownloadButton();
       if (btn) {
@@ -664,8 +786,9 @@
       log("✗ Không thấy <audio> lẫn nút Download để tải.", "err");
       return false;
     }
-    const a = audios[audios.length - 1];
+    const a = (audioEl && (audioEl.currentSrc || audioEl.src)) ? audioEl : audios[audios.length - 1];
     const src = a.currentSrc || a.src;
+    const dur = isFinite(a.duration) ? a.duration : 0;
     try {
       const resp = await fetch(src);
       const blob = await resp.blob();
@@ -674,15 +797,29 @@
         : blob.type.includes("ogg") ? "ogg"
         : blob.type.includes("mp4") || blob.type.includes("aac") ? "m4a"
         : "wav";
+      const fname = `${name}.${ext}`;
+      const kb = Math.round(blob.size / 1024);
+      // Cảnh báo nếu file nghi ngờ lỗi/dở (quá nhỏ so với thời lượng)
+      if (blob.size < 2048) {
+        log(`⚠ ${fname} chỉ ${blob.size} byte — có thể lỗi/dở. Vẫn lưu để bạn kiểm tra.`, "warn");
+      } else if (dur > 0) {
+        log(`(audio ~${dur.toFixed(1)}s, file ${kb} KB)`);
+      }
+      // Ưu tiên ghi vào thư mục đã chọn
+      if (await writeToDir(blob, fname)) {
+        log(`⬇ Đã lưu ${fname} vào thư mục ${S.dirHandle.name} (${kb} KB).`, "ok");
+        return true;
+      }
+      // mặc định: tải vào Downloads
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `${name}.${ext}`;
+      link.download = fname;
       document.body.appendChild(link);
       link.click();
       link.remove();
       setTimeout(() => URL.revokeObjectURL(url), 15000);
-      log(`⬇ Đã tải ${name}.${ext} (${Math.round(blob.size / 1024)} KB).`, "ok");
+      log(`⬇ Đã tải ${fname} (${kb} KB) vào Downloads.`, "ok");
       return true;
     } catch (e) {
       log(`Lỗi fetch blob (${e.message}) — thử bấm nút Download của AI Studio.`, "warn");
@@ -711,7 +848,7 @@
 
     setStatus("running");
     log(`=== ĐOẠN ${S.index + 1}/${S.segments.length} ===`);
-    if (cfg.reapplyVoice && (cfg.voice || cfg.persona)) {
+    if (cfg.reapplyVoice && (cfg.voice || cfg.persona || cfg.style || cfg.pace || cfg.accent)) {
       await selectVoice(cfg.voice);
       await delay(300);
     }
@@ -738,10 +875,25 @@
       }
       await delay(800);
     } else {
-      log("✓ Đã tạo xong audio.", "ok");
-      await delay(400);
-      await downloadCurrent(makeName(S.index));
-      await delay(800); // chờ tải xong rồi sang đoạn kế
+      log("✓ Tín hiệu tạo xong — chờ audio nạp đủ...");
+      // chờ phần tử audio nạp đủ (biết thời lượng) để không tải file dở
+      const a = await waitAudioReady(result.audio);
+      if (!S.running) return;
+      if (a) {
+        log(`✓ Audio sẵn sàng (~${a.duration.toFixed(1)}s).`, "ok");
+      } else {
+        log("⚠ Không xác nhận được audio nạp đủ, vẫn thử tải...", "warn");
+      }
+      await delay(1200); // để blob được ghi hoàn chỉnh
+      const ok = await downloadCurrent(makeName(S.index), a);
+      if (!ok) {
+        log("✗ Tải thất bại. Tạm dừng để bạn kiểm tra rồi bấm 'Tiếp'.", "err");
+        setStatus("waiting");
+        S.awaitingConfirm = true;
+        el.next.disabled = false;
+        return;
+      }
+      await delay(700); // chắc chắn tải xong rồi mới sang đoạn kế
     }
 
     if (cfg.autoConfirm) {
@@ -786,8 +938,8 @@
     el.stop.disabled = false;
     el.pick.disabled = true;
     log(`Bắt đầu từ đoạn ${S.index + 1}. Auto xác nhận: ${cfg.autoConfirm ? "BẬT" : "TẮT"}.`);
-    if (cfg.voice || cfg.persona) {
-      log(`Đặt giọng${cfg.voice ? " " + cfg.voice : ""}${cfg.persona ? " + persona" : ""}...`);
+    if (cfg.voice || cfg.persona || cfg.style || cfg.pace || cfg.accent) {
+      log(`Đặt giọng/phong cách...`);
       await selectVoice(cfg.voice);
       await delay(400);
     }
@@ -823,6 +975,42 @@
   }
 
   // ---------- Sự kiện UI ----------
+  el.pickdir.addEventListener("click", async () => {
+    if (!window.showDirectoryPicker) {
+      log("Trình duyệt không hỗ trợ chọn thư mục (cần Chrome/Edge mới). Sẽ tải vào Downloads.", "err");
+      return;
+    }
+    try {
+      S.dirHandle = await window.showDirectoryPicker({ id: "ttsb-audio", mode: "readwrite" });
+      el.dirname.textContent = "📁 " + S.dirHandle.name;
+      log(`✓ Sẽ lưu file vào thư mục: ${S.dirHandle.name}`, "ok");
+    } catch (e) {
+      log("Đã hủy chọn thư mục.", "warn");
+    }
+  });
+
+  // Ghi blob vào thư mục đã chọn; trả về true nếu thành công
+  async function writeToDir(blob, fname) {
+    if (!S.dirHandle) return false;
+    try {
+      if (S.dirHandle.queryPermission) {
+        let p = await S.dirHandle.queryPermission({ mode: "readwrite" });
+        if (p !== "granted" && S.dirHandle.requestPermission) {
+          p = await S.dirHandle.requestPermission({ mode: "readwrite" });
+        }
+        if (p !== "granted") { log("Không có quyền ghi thư mục — tải vào Downloads.", "warn"); return false; }
+      }
+      const fh = await S.dirHandle.getFileHandle(fname, { create: true });
+      const w = await fh.createWritable();
+      await w.write(blob);
+      await w.close();
+      return true;
+    } catch (e) {
+      log(`Lỗi ghi vào thư mục (${e.message}) — tải vào Downloads.`, "warn");
+      return false;
+    }
+  }
+
   el.pick.addEventListener("click", () => el.file.click());
   el.file.addEventListener("change", (ev) => {
     const f = ev.target.files && ev.target.files[0];
@@ -844,9 +1032,12 @@
 
   el.applyvoice.addEventListener("click", async () => {
     saveCfg();
-    if (!cfg.voice && !cfg.persona) { log("Chưa chọn giọng/persona.", "warn"); return; }
+    if (!cfg.voice && !cfg.persona && !cfg.style && !cfg.pace && !cfg.accent) {
+      log("Chưa chọn giọng/persona/style/pace/accent.", "warn"); return;
+    }
     await selectVoice(cfg.voice);
   });
+  el.discover.addEventListener("click", () => { discoverNotes(); });
 
   el.start.addEventListener("click", startRun);
   el.stop.addEventListener("click", () => { stopRun(false); log("⏹ Đã dừng.", "warn"); });
